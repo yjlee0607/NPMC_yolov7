@@ -1,8 +1,40 @@
+# For NPMC YOLOv7
+This repository is created for users who use NetsPresso Model Compressor. It provides all codes the users need to get optimized YOLOv7 by NPMC.
+
+## Workflow
+```
+Exporting (torch.fx.GraphModule) -> Compressing -> fine-tuning
+                                        └─repeat if needed─┘
+```
+## Settings
+### Environment
+* Install requirements
+```
+pip install -r requirements.txt
+pip install numpy==1.20.3
+pip install opencv-python
+pip install matplotlib
+pip install seaborn
+```
+<!-- * Downgrade torch version (default: )
+``` 
+pip install torch torchvision torchaudio --extra-index-url https://download.pytorch.org/whl/cu116
+``` -->
+## Usage
+### Exporting
+```
+python export_fx.py --weights yolov7_training.pt --cfg cfg/training/yolov7.yaml --save-path traced_yolov7_training.pt
+```
+### Compressing
+* Visit [**NetsPresso**](https://netspresso.ai/).
+* Compress the exported model (ex. traced_yolov7_training.pt)
+* For more details, please visit [docs](https://docs.netspresso.ai/docs).
+
 # Official YOLOv7
 
 Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)
 
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/yolov7-trainable-bag-of-freebies-sets-new/real-time-object-detection-on-coco)](https://paperswithcode.com/sota/real-time-object-detection-on-coco?p=yolov7-trainable-bag-of-freebies-sets-new)
+[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/yolov7-trainable-bag-of-freebies-sets-new/real-time-object-detection-on-coco)][label](https://github.com/Nota-NetsPresso/NetsPresso-Model-Compressor-ModelZoo/tree/main/best_practices/object_detection/torch/yolox_coco)(https://paperswithcode.com/sota/real-time-object-detection-on-coco?p=yolov7-trainable-bag-of-freebies-sets-new)
 [![Hugging Face Spaces](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Spaces-blue)](https://huggingface.co/spaces/akhaliq/yolov7)
 <a href="https://colab.research.google.com/gist/AlexeyAB/b769f5795e65fdab80086f6cb7940dae/yolov7detection.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"></a>
 [![arxiv.org](http://img.shields.io/badge/cs.CV-arXiv%3A2207.02696-B31B1B.svg)](https://arxiv.org/abs/2207.02696)
