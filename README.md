@@ -1,6 +1,6 @@
 # YOLOv7 for NPMC
 This repository is created for users who use NetsPresso Model Compressor. It provides all codes the users need to get optimized YOLOv7 by NPMC.
-* Please read [Appendix](https://github.com/Nota-NetsPresso/NetsPresso-Model-Compressor-ModelZoo/blob/yolov7/best_practices/object_detection/torch/yolov7_voc/YOLOv7.ipynb) for the code modifications.
+* Please visit [Best Practice](https://github.com/Nota-NetsPresso/NetsPresso-Model-Compressor-ModelZoo/blob/yolov7/best_practices/object_detection/torch/yolov7_voc/YOLOv7.ipynb) for the code modifications.
 ## Workflow
 ```
 Exporting (torch.fx.GraphModule) -> Compressing -> Fine-tuning -> Reparameterization 
@@ -15,6 +15,7 @@ pip install numpy==1.20.3
 pip install opencv-python
 pip install matplotlib
 pip install seaborn
+pip install pycocotools
 ```
 <!-- * Downgrade torch version (default: )
 ``` 
@@ -39,7 +40,10 @@ python train_npmc.py --batch-size 32 --data data/coco.yaml --cfg cfg/training/yo
 ```
 python reparameterization_npmc.py --model runs/training/compressed_yolov7/weights/best.pt --save-path runs/training/compressed_yolov7/best_reparameterized.pt
 ```
-
+### Testing
+```
+python test_npmc.py --data data/coco.yaml --no-trace --img 640 --batch 32 --conf 0.001 --iou 0.65 --device 0 --graphmodule-model /root/workspace/NPMC_yolov7/runs/train/compressed_yolov78/weights/best.pt --cfg cfg/training/yolov7.yaml
+```
 # Official YOLOv7
 
 Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)

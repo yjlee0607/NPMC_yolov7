@@ -60,6 +60,8 @@ def test(data,
             data_dict = yaml.load(f, Loader=yaml.SafeLoader)  # data dict
         nc =  int(data_dict['nc'])  # number of classes
         model = torch.load(opt.graphmodule_model, map_location=device)
+        if isinstance(model, dict):
+            model = model['model']
         model_for_hyp = Model(opt.cfg, ch=3, nc=nc).to(device)  # create
         detector_for_hyp = model_for_hyp.model[-1]
 
