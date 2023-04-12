@@ -250,7 +250,10 @@ def attempt_load(weights, map_location=None):
     for w in weights if isinstance(weights, list) else [weights]:
         attempt_download(w)
         ckpt = torch.load(w, map_location=map_location)  # load
-        model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
+        if isinstance(model, torch.fx.GraphModule):
+            model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().eval())  # FP32 model
+        else:
+            model.append(ckpt['ema' if ckpt.get('ema') else 'model'].float().fuse().eval())  # FP32 model
     
     # Compatibility updates
     for m in model.modules():
@@ -269,4 +272,6 @@ def attempt_load(weights, map_location=None):
             setattr(model, k, getattr(model[-1], k))
         return model  # return ensemble
 
-
+if __name__ == "__main__":
+    model = torch.load('/root/workspace/NPMC_yolov7/compressed_traced_yolov7_training.pt')
+    print('hi')

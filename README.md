@@ -1,9 +1,9 @@
-# For NPMC YOLOv7
+# YOLOv7 for NPMC
 This repository is created for users who use NetsPresso Model Compressor. It provides all codes the users need to get optimized YOLOv7 by NPMC.
-
+* Please read [Appendix](https://github.com/Nota-NetsPresso/NetsPresso-Model-Compressor-ModelZoo/blob/yolov7/best_practices/object_detection/torch/yolov7_voc/YOLOv7.ipynb) for the code modifications.
 ## Workflow
 ```
-Exporting (torch.fx.GraphModule) -> Compressing -> fine-tuning
+Exporting (torch.fx.GraphModule) -> Compressing -> Fine-tuning -> Reparameterization 
                                         └─repeat if needed─┘
 ```
 ## Settings
@@ -26,9 +26,19 @@ pip install torch torchvision torchaudio --extra-index-url https://download.pyto
 python export_fx.py --weights yolov7_training.pt --cfg cfg/training/yolov7.yaml --save-path traced_yolov7_training.pt
 ```
 ### Compressing
-* Visit [**NetsPresso**](https://netspresso.ai/).
+* Visit [**NetsPresso**](https://netspresso.ai/)
 * Compress the exported model (ex. traced_yolov7_training.pt)
-* For more details, please visit [docs](https://docs.netspresso.ai/docs).
+* For more details, please visit [docs](https://docs.netspresso.ai/docs/mc-step1-prepare-model)
+
+### Fine-tuning
+```
+python train_npmc.py --batch-size 32 --data data/coco.yaml --cfg cfg/training/yolov7.yaml --name compressed_yolov7 --hyp data/hyp.scratch.p5.yaml --graphmodule-model compressed_traced_yolov7_training.pt --epochs 300
+```
+
+### Reparameterizing
+```
+python reparameterization_npmc.py --model runs/training/compressed_yolov7/weights/best.pt --save-path runs/training/compressed_yolov7/best_reparameterized.pt
+```
 
 # Official YOLOv7
 
