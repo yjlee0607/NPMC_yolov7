@@ -1,10 +1,21 @@
 import argparse
 from typing import *
 import copy
+import yaml
 
 import torch
 import torch.nn as nn
 import torch.fx as fx
+
+implicit_layer_number = {
+    'yolov7-tiny': 77,
+    'yolov7': 105,
+    'yolov7x': 121,
+    'yolov7-w6': 122,
+    'yolov7-d6': 166,
+    'yolov7-e6': 144,
+    'yolov7-e6e': 265,
+}
 
 def find_node(model, name):
     for idx, node in enumerate(list(model.graph.nodes)):
@@ -119,7 +130,8 @@ def get_module_dict(model):
         model = model.module_dict
     return model
 
-def fusing_yolov7(model):
+def fusing_yolov7(model,model_name, head_outs):
+    imn = implicit_layer_number[model_name]
     model = model.float().eval()
     # fusing conv-bn
     print("Fusing Conv-BN")
@@ -128,53 +140,132 @@ def fusing_yolov7(model):
 
     print("Reparameterizing")
     # head_0
-    head = find_node(fused_model,'model_75_act')
-    conv1x1 = find_node(fused_model,'model_102_rbr_1x1_0')
-    conv3x3 = find_node(fused_model,'model_102_rbr_dense_0')
-    tail = find_node(fused_model,'model_102_act')
-    rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+    if model_name == 'yolov7':
+        head = find_node(fused_model,'model_75_act')
+        conv1x1 = find_node(fused_model,'model_102_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_102_rbr_dense_0')
+        tail = find_node(fused_model,'model_102_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
 
-    head = find_node(fused_model,'model_102_act')
-    target = find_node(fused_model,'model_105_m_0')
+        head = find_node(fused_model,'model_88_act')
+        conv1x1 = find_node(fused_model,'model_103_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_103_rbr_dense_0')
+        tail = find_node(fused_model,'model_103_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+        
+        head = find_node(fused_model,'model_101_act')
+        conv1x1 = find_node(fused_model,'model_104_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_104_rbr_dense_0')
+        tail = find_node(fused_model,'model_104_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+
+    head = find_node(fused_model,f'model_{head_outs[0]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_0')
     tail_1 =  find_node(fused_model,'getattr_1')
     tail_2 = find_node(fused_model,'view')
     
     module_dict = get_module_dict(fused_model)
-    im_a_weight = module_dict.model._modules['105']._modules['ia']._modules['0']._parameters['NOTA_implicit']
-    im_m_weight = module_dict.model._modules['105']._modules['im']._modules['0']._parameters['NOTA_implicit']
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['0']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['0']._parameters['NOTA_implicit']
     rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
 
     # head_1
-    head = find_node(fused_model,'model_88_act')
-    conv1x1 = find_node(fused_model,'model_103_rbr_1x1_0')
-    conv3x3 = find_node(fused_model,'model_103_rbr_dense_0')
-    tail = find_node(fused_model,'model_103_act')
-    rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
     
-    head = find_node(fused_model,'model_103_act')
-    target = find_node(fused_model,'model_105_m_1')
+    head = find_node(fused_model,f'model_{head_outs[1]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_1')
     tail_1 =  find_node(fused_model,'getattr_2')
     tail_2 = find_node(fused_model,'view_1')
-    im_a_weight = module_dict.model._modules['105']._modules['ia']._modules['1']._parameters['NOTA_implicit']
-    im_m_weight = module_dict.model._modules['105']._modules['im']._modules['1']._parameters['NOTA_implicit']
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['1']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['1']._parameters['NOTA_implicit']
     rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
 
 
     # head_2
-    head = find_node(fused_model,'model_101_act')
-    conv1x1 = find_node(fused_model,'model_104_rbr_1x1_0')
-    conv3x3 = find_node(fused_model,'model_104_rbr_dense_0')
-    tail = find_node(fused_model,'model_104_act')
-    rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
 
-    head = find_node(fused_model,'model_104_act')
-    target = find_node(fused_model,'model_105_m_2')
+    head = find_node(fused_model,f'model_{head_outs[2]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_2')
     tail_1 =  find_node(fused_model,'getattr_3')
     tail_2 = find_node(fused_model,'view_2')
-    im_a_weight = module_dict.model._modules['105']._modules['ia']._modules['2']._parameters['NOTA_implicit']
-    im_m_weight = module_dict.model._modules['105']._modules['im']._modules['2']._parameters['NOTA_implicit']
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['2']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['2']._parameters['NOTA_implicit']
     rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
 
+    print("Reparameterizing - Success")
+
+    print("Recompile...")
+    fused_model.graph.lint()
+    fused_model.recompile()
+    print("Success")
+    return fused_model
+    
+def fusing_yolov7_aux(model,model_name, head_outs):
+    imn = implicit_layer_number[model_name]
+    model = model.float().eval()
+    # fusing conv-bn
+    print("Fusing Conv-BN")
+    fused_model = fuse(model)
+    print("Fusing Conv-BN - Success")
+
+    print("Reparameterizing")
+    # head_0
+    if model_name == 'yolov7':
+        head = find_node(fused_model,'model_75_act')
+        conv1x1 = find_node(fused_model,'model_102_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_102_rbr_dense_0')
+        tail = find_node(fused_model,'model_102_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+
+        head = find_node(fused_model,'model_88_act')
+        conv1x1 = find_node(fused_model,'model_103_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_103_rbr_dense_0')
+        tail = find_node(fused_model,'model_103_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+        
+        head = find_node(fused_model,'model_101_act')
+        conv1x1 = find_node(fused_model,'model_104_rbr_1x1_0')
+        conv3x3 = find_node(fused_model,'model_104_rbr_dense_0')
+        tail = find_node(fused_model,'model_104_act')
+        rep_conv1x1(fused_model,head,conv1x1,conv3x3,tail)
+
+    head = find_node(fused_model,f'model_{head_outs[0]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_0')
+    tail_1 =  find_node(fused_model,'getattr_1')
+    tail_2 = find_node(fused_model,'view')
+    
+    module_dict = get_module_dict(fused_model)
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['0']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['0']._parameters['NOTA_implicit']
+    rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
+
+    # head_1
+    
+    head = find_node(fused_model,f'model_{head_outs[1]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_1')
+    tail_1 =  find_node(fused_model,'getattr_2')
+    tail_2 = find_node(fused_model,'view_2')
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['1']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['1']._parameters['NOTA_implicit']
+    rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
+
+
+    # head_2
+
+    head = find_node(fused_model,f'model_{head_outs[2]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_2')
+    tail_1 =  find_node(fused_model,'getattr_3')
+    tail_2 = find_node(fused_model,'view_4')
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['2']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['2']._parameters['NOTA_implicit']
+    rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
+
+
+    head = find_node(fused_model,f'model_{head_outs[3]}_act')
+    target = find_node(fused_model,f'model_{imn}_m_3')
+    tail_1 =  find_node(fused_model,'getattr_4')
+    tail_2 = find_node(fused_model,'view_6')
+    im_a_weight = module_dict.model._modules[str(imn)]._modules['ia']._modules['3']._parameters['NOTA_implicit']
+    im_m_weight = module_dict.model._modules[str(imn)]._modules['im']._modules['3']._parameters['NOTA_implicit']
+    rep_im(fused_model,head,target,tail_1,tail_2,im_a_weight,im_m_weight)
     print("Reparameterizing - Success")
 
     print("Recompile...")
@@ -185,16 +276,36 @@ def fusing_yolov7(model):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model', type=str, default='yolov7_voc_compressed_model_L2Norm_03.pt', help='finetuned-yolov7 graphmodule path')
-    parser.add_argument('--save-path', type=str, default='yolo7-voc-finetuned_rep.pt', help='finetuned-yolov7 graphmodule path')
-    args = parser.parse_args()
+    parser.add_argument('--model', type=str, default='/root/workspace/yolov7_training_models/yolov7w6_exported_l2norm_10.pt', help='finetuned-yolov7 graphmodule path')
+    parser.add_argument('--model-name', type=str,default='yolov7-w6', choices=['yolov7','yolov7x','yolov7-d6','yolov7-e6','yolov7-e6e','yolov7-tiny','yolov7-w6'])
+    parser.add_argument('--save-path', type=str, default='/root/workspace/yolov7_training_models/yolov7w6_exported_l2norm_10_rep_test_0418.pt', help='finetuned-yolov7 graphmodule path')
+    parser.add_argument('--cfg', type=str, default='/root/workspace/NPMC_yolov7/cfg/training/yolov7-w6.yaml', help='model.yaml path')
     
+    args = parser.parse_args()
+    with open(args.cfg) as f:
+        cfg = yaml.load(f, Loader=yaml.SafeLoader)  # load hyps
+    head_outs = cfg['head'][-1][0]
+    print(head_outs)
     ckpt = torch.load(args.model, map_location='cpu')
+
     if type(ckpt) == dict:
         model = ckpt['model']
     else:
         model = ckpt
     model.float().train()
-    fused_model = fusing_yolov7(model)
-    
+    if args.model_name in ['yolov7','yolov7-tiny','yolov7x']:
+        fused_model = fusing_yolov7(model, args.model_name, head_outs)
+    elif args.model_name in ['yolov7-w6','yolov7-d6','yolov7-e6','yolov7-e6e']:
+        fused_model = fusing_yolov7_aux(model, args.model_name, head_outs)
+    else:
+        NotImplementedError
+
     torch.save(fused_model,args.save_path)
+    
+    x = torch.randn(1,3,640,640)
+    for a,b in zip(model(x),fused_model(x)):
+        print(torch.allclose(a,b))
+        print(torch.sum((a-b)**2))
+
+# python reparameterization_npmc.py --model /root/workspace/NPMC_yolov7/compressed_traced_yolov7_training.pt --model-name yolov7 --save-path /root/workspace/NPMC_yolov7/compressed_traced_yolov7_training_rep_0418_test.pt --cfg /root/workspace/NPMC_yolov7/cfg/training/yolov7.yaml
+# python reparameterization_npmc.py --model /root/workspace/yolov7_training_models/yolov7w6_exported_l2norm_10.pt --model-name yolov7-w6 --save-path /root/workspace/yolov7_training_models/yolov7w6_exported_l2norm_10_rep_test_0418.pt --cfg /root/workspace/NPMC_yolov7/cfg/training/yolov7-w6.yaml

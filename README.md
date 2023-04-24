@@ -36,14 +36,21 @@ python export_fx.py --weights yolov7_training.pt --cfg cfg/training/yolov7.yaml 
 python train_npmc.py --batch-size 32 --data data/coco.yaml --cfg cfg/training/yolov7.yaml --name compressed_yolov7 --hyp data/hyp.scratch.p5.yaml --graphmodule-model compressed_traced_yolov7_training.pt --epochs 300
 ```
 
+python train_aux.py --batch-size 32 --data data/coco.yaml --cfg cfg/training/yolov7-w6.yaml --name compressed_yolov7-w6 --hyp data/hyp.scratch.p6.yaml --weights /root/workspace/yolov7_training_models/yolov7w6_exported_l2norm_10.pt --epochs 1 --npmc-mode
+
 ### Reparameterizing
 ```
 python reparameterization_npmc.py --model runs/training/compressed_yolov7/weights/best.pt --save-path runs/training/compressed_yolov7/best_reparameterized.pt
 ```
 ### Testing
 ```
-python test_npmc.py --data data/coco.yaml --no-trace --img 640 --batch 32 --conf 0.001 --iou 0.65 --device 0 --graphmodule-model /root/workspace/NPMC_yolov7/runs/train/compressed_yolov78/weights/best.pt --cfg cfg/training/yolov7.yaml
+python test_npmc.py --data data/coco.yaml --no-trace --img 640 --batch 32 --conf 0.001 --iou 0.65 --device 0 --graphmodule-model /root/workspace/NPMC_yolov7/runs/train/compressed_yolov78/ weights/best.pt --cfg cfg/training/yolov7.yaml
 ```
+
+python test_npmc.py --data data/coco.yaml --no-trace --img 640 --batch 32 --conf 0.001 --iou 0.65 --device 0 --graphmodule-model /root/workspace/NPMC_yolov7/compressed_traced_yolov7_training.pt --cfg cfg/training/yolov7.yaml
+
+python test_npmc.py --data data/coco.yaml --no-trace --img 640 --batch 32 --conf 0.001 --iou 0.65 --device 0 --graphmodule-model /root/workspace/NPMC_yolov7/compressed_traced_yolov7_training_rep.pt --cfg cfg/training/yolov7.yaml
+
 # Official YOLOv7
 
 Implementation of paper - [YOLOv7: Trainable bag-of-freebies sets new state-of-the-art for real-time object detectors](https://arxiv.org/abs/2207.02696)

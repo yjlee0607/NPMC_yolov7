@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 import test  # import test.py to get mAP after each epoch
 from models.experimental import attempt_load
-from models.yolo import Model
+from models.yolo import Model, DetectPostPart
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -68,7 +68,7 @@ def train(hyp, opt, device, tb_writer=None):
     loggers = {'wandb': None}  # loggers dict
     if rank in [-1, 0]:
         opt.hyp = hyp  # add hyperparameters
-        run_id = torch.load(weights).get('wandb_id') if weights.endswith('.pt') and os.path.isfile(weights) else None
+        run_id = torch.load(weights).get('wandb_id') if weights.endswith('.pt') and os.path.isfile(weights) and not opt.npmc_mode else None
         wandb_logger = WandbLogger(opt, Path(opt.save_dir).stem, run_id, data_dict)
         loggers['wandb'] = wandb_logger.wandb
         data_dict = wandb_logger.data_dict
@@ -80,8 +80,9 @@ def train(hyp, opt, device, tb_writer=None):
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
+    detect_post_part = None
     pretrained = weights.endswith('.pt')
-    if pretrained:
+    if pretrained and not opt.npmc_mode:
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
@@ -91,6 +92,21 @@ def train(hyp, opt, device, tb_writer=None):
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(state_dict, strict=False)  # load
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
+    elif opt.npmc_mode:
+        model = torch.load(opt.weights, map_location=device)
+        model_for_hyp = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        detector_for_hyp = model_for_hyp.model[-1]
+        stride, names = model_for_hyp.stride, model_for_hyp.names
+        na, nc, nl, anchors, anchor_grid, grid, no = detector_for_hyp.na, detector_for_hyp.nc, detector_for_hyp.nl,detector_for_hyp.anchors, \
+                                                    detector_for_hyp.anchor_grid, detector_for_hyp.grid, detector_for_hyp.no
+        model = model.to(device)
+        del model_for_hyp, detector_for_hyp
+        # update hyps    
+        model.stride = stride
+        model.names = names
+        # attach post part of Detect(IDetect)
+        detect_post_part = DetectPostPart(na,nc,nl,anchors,stride,anchor_grid,grid,no)
+        model.model = nn.Sequential(detect_post_part)
     else:
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
     with torch_distributed_zero_first(rank):
@@ -123,6 +139,12 @@ def train(hyp, opt, device, tb_writer=None):
         if hasattr(v, 'im'):
             if hasattr(v.im, 'implicit'):           
                 pg0.append(v.im.implicit)
+            elif opt.npmc_mode:
+                for vk,vm in v.im._modules.items():
+                    if hasattr(vm, 'implicit_'):
+                        pg0.append(getattr(vm,'implicit_'))
+                    elif hasattr(vm, 'implicit'):
+                        pg0.append(getattr(vm,'implicit'))  
             else:
                 for iv in v.im:
                     pg0.append(iv.implicit)
@@ -147,6 +169,12 @@ def train(hyp, opt, device, tb_writer=None):
         if hasattr(v, 'ia'):
             if hasattr(v.ia, 'implicit'):           
                 pg0.append(v.ia.implicit)
+            elif opt.npmc_mode:
+                for vk,va in v.ia._modules.items():
+                    if hasattr(va,'implicit_'):
+                        pg0.append(getattr(va,'implicit_'))
+                    elif hasattr(va,'implicit'):
+                        pg0.append(getattr(va,'implicit'))  
             else:
                 for iv in v.ia:
                     pg0.append(iv.implicit)
@@ -201,7 +229,7 @@ def train(hyp, opt, device, tb_writer=None):
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
-    if pretrained:
+    if pretrained and not opt.npmc_mode:
         # Optimizer
         if ckpt['optimizer'] is not None:
             optimizer.load_state_dict(ckpt['optimizer'])
@@ -421,7 +449,8 @@ def train(hyp, opt, device, tb_writer=None):
                                                  wandb_logger=wandb_logger,
                                                  compute_loss=compute_loss,
                                                  is_coco=is_coco,
-                                                 v5_metric=opt.v5_metric)
+                                                 v5_metric=opt.v5_metric,
+                                                 detect_post_part = detect_po)
 
             # Write
             with open(results_file, 'a') as f:
@@ -558,6 +587,7 @@ if __name__ == '__main__':
     parser.add_argument('--save_period', type=int, default=-1, help='Log model after every "save_period" epoch')
     parser.add_argument('--artifact_alias', type=str, default="latest", help='version of dataset artifact to be used')
     parser.add_argument('--v5-metric', action='store_true', help='assume maximum recall as 1.0 in AP calculation')
+    parser.add_argument('--npmc-mode', action='store_true', help='train the model that is compressed by NetsPresso Model Compressor')
     opt = parser.parse_args()
 
     # Set DDP variables

@@ -23,8 +23,8 @@ if __name__ == "__main__":
     
     weights = torch.load(args.weights)['model'].state_dict()
     model = ModelForNPMC(args.cfg, nc=cfg['nc'])
-    model.load_state_dict(weights)
-
+    model.load_state_dict(weights, strict=False)
+    model.train()
     graph = torch.fx.Tracer().trace(model)
     traced_model = torch.fx.GraphModule(model, graph)
 
@@ -34,3 +34,4 @@ if __name__ == "__main__":
         assert torch.allclose(original_output,traced_output), "inference result is not equal!"
 
     torch.save(traced_model, args.save_path)
+    
